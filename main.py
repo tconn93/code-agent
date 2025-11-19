@@ -116,7 +116,8 @@ def main():
     # Create orchestrator
     orchestrator = PipelineOrchestrator(
         api_key=config.anthropic_api_key,
-        workspace_path=config.workspace_path
+        workspace_path=config.workspace_path,
+        settings=config
     )
 
     try:

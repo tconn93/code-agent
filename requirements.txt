@@ -1,7 +1,18 @@
 # Core dependencies
-anthropic>=0.18.0
-docker>=7.0.0
-playwright>=1.40.0
+anthropic>=0.18.0  # Claude/Anthropic API
+docker>=7.0.0  # Docker SDK for sandboxing
+playwright>=1.40.0  # Browser automation
+
+# AI Provider SDKs
+google-generativeai>=0.3.0  # Google Gemini API
+openai>=1.0.0  # OpenAI SDK (also used for Grok via custom base URL)
+groq>=0.4.0  # Groq API for fast inference
+
+# Web Interface
+flask>=3.0.0  # Web framework
+flask-socketio>=5.3.0  # WebSocket support for real-time updates
+python-socketio>=5.10.0  # SocketIO client
+werkzeug>=3.0.0  # WSGI utilities
 
 # Optional dependencies for enhanced functionality
 prometheus-client>=0.19.0  # For metrics and monitoring

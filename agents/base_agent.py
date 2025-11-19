@@ -1,12 +1,19 @@
 """
 Base Agent class providing common functionality for all specialized agents.
 """
-import anthropic
 import docker
 import json
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+from providers import (
+    BaseProvider,
+    AnthropicProvider,
+    GeminiProvider,
+    GrokProvider,
+    GroqProvider,
+    OpenAIProvider
+)
 
 
 class BaseAgent(ABC):
@@ -16,13 +23,46 @@ class BaseAgent(ABC):
     and tool execution.
     """
 
-    def __init__(self, api_key: str, workspace_path: str = "/tmp/agent-workspace"):
-        self.client = anthropic.Anthropic(api_key=api_key)
+    def __init__(self, api_key: str, workspace_path: str = "/tmp/agent-workspace",
+                 provider: str = "anthropic", model: str = "claude-sonnet-4-20250514"):
+        """
+        Initialize base agent.
+
+        Args:
+            api_key: API key for the provider
+            workspace_path: Path to shared workspace
+            provider: AI provider name (anthropic, gemini, grok, groq)
+            model: Model name for the provider
+        """
         self.docker_client = docker.from_env()
         self.container = None
         self.workspace_path = workspace_path
         self.conversation_history = []
         self.agent_state = {}
+
+        # Create provider instance
+        self.provider = self._create_provider(provider, api_key, model)
+
+        # Configurable settings (can be overridden after initialization)
+        self.model = model
+        self.max_iterations = 20
+        self.output_truncate_length = 5000
+
+    def _create_provider(self, provider_name: str, api_key: str, model: str) -> BaseProvider:
+        """Create the appropriate provider instance."""
+        providers = {
+            "anthropic": AnthropicProvider,
+            "gemini": GeminiProvider,
+            "grok": GrokProvider,
+            "groq": GroqProvider,
+            "openai": OpenAIProvider
+        }
+
+        provider_class = providers.get(provider_name.lower())
+        if not provider_class:
+            raise ValueError(f"Unknown provider: {provider_name}. Supported providers: {list(providers.keys())}")
+
+        return provider_class(api_key=api_key, model=model)
 
     @property
     @abstractmethod
@@ -189,19 +229,23 @@ class BaseAgent(ABC):
 
         return "Unknown tool"
 
-    def run_agent(self, task: str, max_iterations: int = 20,
-                  model: str = "claude-sonnet-4-20250514") -> Dict:
+    def run_agent(self, task: str, max_iterations: int = None,
+                  model: str = None) -> Dict:
         """
         Main agent execution loop.
 
         Args:
             task: Task description for the agent
-            max_iterations: Maximum number of conversation iterations
-            model: Claude model to use
+            max_iterations: Maximum number of conversation iterations (uses instance default if None)
+            model: Claude model to use (uses instance default if None)
 
         Returns:
             Dictionary containing conversation history and final state
         """
+        # Use instance defaults if not specified
+        max_iterations = max_iterations or self.max_iterations
+        model = model or self.model
+
         system_prompt = self.get_system_prompt()
         tools = self.get_tool_definitions()
 
@@ -215,51 +259,76 @@ class BaseAgent(ABC):
         while iteration < max_iterations:
             iteration += 1
             print(f"\n[{self.agent_name}] Iteration {iteration}/{max_iterations}")
+            print(f"[{self.agent_name}] Using provider: {self.provider.provider_name}, model: {model}")
 
-            # Call Claude
-            response = self.client.messages.create(
-                model=model,
-                max_tokens=4096,
+            # Call AI provider
+            response = self.provider.create_message(
                 system=system_prompt,
+                messages=messages,
                 tools=tools,
-                messages=messages
+                max_tokens=4096
             )
 
-            print(f"[{self.agent_name}] Stop reason: {response.stop_reason}")
+            print(f"[{self.agent_name}] Stop reason: {response['stop_reason']}")
 
             # Process response
-            if response.stop_reason == "end_turn":
-                final_message = next(
-                    (block.text for block in response.content if hasattr(block, "text")),
-                    None
-                )
+            if response["stop_reason"] == "end_turn":
+                # Extract text from content blocks
+                final_message = None
+                for block in response["content"]:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        final_message = block.get("text")
+                        break
+                    elif hasattr(block, "text"):
+                        final_message = block.text
+                        break
+
                 print(f"\n[{self.agent_name}] Task Complete")
 
                 return {
                     "status": "completed",
                     "messages": messages,
                     "final_response": final_message,
-                    "iterations": iteration
+                    "iterations": iteration,
+                    "usage": response.get("usage", {})
                 }
 
-            elif response.stop_reason == "tool_use":
+            elif response["stop_reason"] == "tool_use":
                 # Process tool calls
-                assistant_message = {"role": "assistant", "content": response.content}
+                assistant_message = {"role": "assistant", "content": response["content"]}
                 messages.append(assistant_message)
 
                 tool_results = []
 
-                for block in response.content:
-                    if block.type == "tool_use":
+                for block in response["content"]:
+                    # Handle both dict and object formats
+                    if isinstance(block, dict):
+                        if block.get("type") == "tool_use":
+                            tool_name = block.get("name", "")
+                            tool_input = block.get("input", {})
+                            tool_id = block.get("id", "")
+
+                            print(f"[{self.agent_name}] Tool: {tool_name}")
+
+                            result = self.process_tool_call(tool_name, tool_input)
+
+                            tool_results.append(
+                                self.provider.format_tool_result(
+                                    tool_id,
+                                    str(result)[:self.output_truncate_length]
+                                )
+                            )
+                    elif hasattr(block, "type") and block.type == "tool_use":
                         print(f"[{self.agent_name}] Tool: {block.name}")
 
                         result = self.process_tool_call(block.name, block.input)
 
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": str(result)[:5000]  # Limit output size
-                        })
+                        tool_results.append(
+                            self.provider.format_tool_result(
+                                block.id,
+                                str(result)[:self.output_truncate_length]
+                            )
+                        )
 
                 messages.append({
                     "role": "user",
@@ -267,11 +336,11 @@ class BaseAgent(ABC):
                 })
 
             else:
-                print(f"[{self.agent_name}] Unexpected stop reason: {response.stop_reason}")
+                print(f"[{self.agent_name}] Unexpected stop reason: {response['stop_reason']}")
                 return {
                     "status": "error",
                     "messages": messages,
-                    "error": f"Unexpected stop reason: {response.stop_reason}",
+                    "error": f"Unexpected stop reason: {response['stop_reason']}",
                     "iterations": iteration
                 }
 

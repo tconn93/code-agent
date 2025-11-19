@@ -76,6 +76,15 @@ Each stage is handled by a specialized agent that can run independently or as pa
 - Supports environment variables, JSON files, or programmatic config
 - Priority: config file → ./config.json → environment variables
 - Settings include API keys, Docker config, agent parameters, and defaults
+- **Multi-provider support**: Use Anthropic, Gemini, Grok, or Groq models
+- Per-agent provider and model configuration for cost optimization
+- See [CONFIG.md](./CONFIG.md) and [CONFIG_MULTI_PROVIDER.md](./CONFIG_MULTI_PROVIDER.md) for comprehensive configuration guides
+
+**Provider System** (`providers/`):
+- Abstract base provider interface for multi-AI-provider support
+- Provider implementations: Anthropic, Gemini, Grok, Groq
+- Standardized message format across all providers
+- Automatic provider selection based on agent configuration
 
 ### Docker Sandbox
 
@@ -101,6 +110,7 @@ docker build -t coding-agent-sandbox .
 # Create default configuration
 python main.py init
 # Edit config.json and add your Anthropic API key
+# See CONFIG.md for detailed configuration options
 ```
 
 ### Running the Pipeline
@@ -239,6 +249,12 @@ code-agent/
 │   ├── testing_agent.py      # Testing & QA
 │   ├── deployment_agent.py   # Deployment & DevOps
 │   └── monitoring_agent.py   # Monitoring & observability
+├── providers/                 # AI provider abstractions
+│   ├── base_provider.py      # Abstract provider interface
+│   ├── anthropic_provider.py # Anthropic/Claude provider
+│   ├── gemini_provider.py    # Google Gemini provider
+│   ├── grok_provider.py      # xAI Grok provider
+│   └── groq_provider.py      # Groq provider
 ├── pipelines/                 # Orchestration
 │   └── orchestrator.py       # Pipeline coordinator
 ├── config/                    # Configuration management
@@ -249,6 +265,8 @@ code-agent/
 ├── main.py                   # CLI entry point
 ├── requirements.txt          # Python dependencies
 ├── CLAUDE.md                 # This file
+├── CONFIG.md                 # Basic configuration guide
+├── CONFIG_MULTI_PROVIDER.md  # Multi-provider setup guide
 └── DEPLOYMENT.md             # Deployment guide
 
 Legacy: agents/coding_agent_legacy.py (original single-agent implementation)

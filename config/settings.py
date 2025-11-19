@@ -12,8 +12,14 @@ from dataclasses import dataclass, asdict
 class Settings:
     """Application settings."""
 
-    # Anthropic API
-    anthropic_api_key: str
+    # API Keys for different providers
+    anthropic_api_key: str = None
+    gemini_api_key: str = None
+    grok_api_key: str = None
+    groq_api_key: str = None
+    openai_api_key: str = None
+
+    # Default model (backward compatibility)
     anthropic_model: str = "claude-sonnet-4-20250514"
 
     # Docker settings
@@ -23,6 +29,7 @@ class Settings:
     # Agent settings
     max_iterations: int = 20
     output_truncate_length: int = 5000
+    agent_models: Dict[str, str] = None  # Per-agent model configuration (format: "provider:model")
 
     # Pipeline settings
     default_output_dir: str = "./pipeline_output"
@@ -44,6 +51,56 @@ class Settings:
         if self.deployment_environments is None:
             self.deployment_environments = ["dev", "staging", "production"]
 
+        # Initialize agent_models with defaults if not provided
+        if self.agent_models is None:
+            self.agent_models = {
+                "architect": f"anthropic:{self.anthropic_model}",
+                "coding": f"anthropic:{self.anthropic_model}",
+                "testing": f"anthropic:{self.anthropic_model}",
+                "deployment": f"anthropic:{self.anthropic_model}",
+                "monitoring": f"anthropic:{self.anthropic_model}"
+            }
+
+        # Ensure at least one API key is provided
+        if not any([self.anthropic_api_key, self.gemini_api_key, self.grok_api_key, self.groq_api_key, self.openai_api_key]):
+            # Only raise error if we're not initializing from file (allow defaults for config creation)
+            pass
+
+    def get_model_for_agent(self, agent_type: str) -> str:
+        """
+        Get the model configuration for a specific agent type.
+        Returns format: "provider:model"
+        """
+        return self.agent_models.get(agent_type, f"anthropic:{self.anthropic_model}")
+
+    def parse_model_config(self, model_config: str) -> tuple:
+        """
+        Parse model configuration string.
+
+        Args:
+            model_config: String in format "provider:model" or just "model"
+
+        Returns:
+            Tuple of (provider, model)
+        """
+        if ":" in model_config:
+            provider, model = model_config.split(":", 1)
+            return provider.lower(), model
+        else:
+            # Default to anthropic if no provider specified
+            return "anthropic", model_config
+
+    def get_api_key_for_provider(self, provider: str) -> Optional[str]:
+        """Get API key for a specific provider."""
+        provider_key_map = {
+            "anthropic": self.anthropic_api_key,
+            "gemini": self.gemini_api_key,
+            "grok": self.grok_api_key,
+            "groq": self.groq_api_key,
+            "openai": self.openai_api_key
+        }
+        return provider_key_map.get(provider.lower())
+
     @classmethod
     def from_dict(cls, config: Dict[str, Any]) -> 'Settings':
         """Create Settings from dictionary."""
@@ -59,12 +116,22 @@ class Settings:
     @classmethod
     def from_env(cls) -> 'Settings':
         """Load settings from environment variables."""
-        api_key = os.getenv('ANTHROPIC_API_KEY')
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable is required")
+        # Check if at least one API key is provided
+        anthropic_key = os.getenv('ANTHROPIC_API_KEY')
+        gemini_key = os.getenv('GEMINI_API_KEY')
+        grok_key = os.getenv('GROK_API_KEY')
+        groq_key = os.getenv('GROQ_API_KEY')
+        openai_key = os.getenv('OPENAI_API_KEY')
+
+        if not any([anthropic_key, gemini_key, grok_key, groq_key, openai_key]):
+            raise ValueError("At least one API key is required (ANTHROPIC_API_KEY, GEMINI_API_KEY, GROK_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY)")
 
         return cls(
-            anthropic_api_key=api_key,
+            anthropic_api_key=anthropic_key,
+            gemini_api_key=gemini_key,
+            grok_api_key=grok_key,
+            groq_api_key=groq_key,
+            openai_api_key=openai_key,
             anthropic_model=os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
             docker_image=os.getenv('DOCKER_IMAGE', 'coding-agent-sandbox'),
             workspace_path=os.getenv('WORKSPACE_PATH', '/tmp/agent-workspace'),
@@ -115,7 +182,11 @@ def load_config(config_path: Optional[str] = None) -> Settings:
 def create_default_config(output_path: str = "./config.json"):
     """Create a default configuration file."""
     default_settings = Settings(
-        anthropic_api_key="your-api-key-here",
+        anthropic_api_key="your-anthropic-api-key-here",
+        gemini_api_key="your-gemini-api-key-here-optional",
+        grok_api_key="your-grok-api-key-here-optional",
+        groq_api_key="your-groq-api-key-here-optional",
+        openai_api_key="your-openai-api-key-here-optional",
         anthropic_model="claude-sonnet-4-20250514",
         docker_image="coding-agent-sandbox",
         workspace_path="/tmp/agent-workspace",
@@ -132,4 +203,10 @@ def create_default_config(output_path: str = "./config.json"):
 
     default_settings.save(output_path)
     print(f"Default configuration created at: {output_path}")
-    print("Please update the anthropic_api_key in the config file.")
+    print("\nPlease update the API keys in the config file:")
+    print("  - anthropic_api_key: Required if using Claude models")
+    print("  - gemini_api_key: Required if using Gemini models")
+    print("  - grok_api_key: Required if using Grok models")
+    print("  - groq_api_key: Required if using Groq models")
+    print("  - openai_api_key: Required if using OpenAI GPT models")
+    print("\nYou only need to provide keys for the providers you plan to use.")

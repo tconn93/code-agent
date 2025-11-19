@@ -11,6 +11,7 @@ from agents.coding_agent import CodingAgent
 from agents.testing_agent import TestingAgent
 from agents.deployment_agent import DeploymentAgent
 from agents.monitoring_agent import MonitoringAgent
+from config.settings import Settings
 
 
 class PipelineOrchestrator:
@@ -21,9 +22,11 @@ class PipelineOrchestrator:
     1. Architecture/Design -> 2. Implementation -> 3. Testing -> 4. Deployment -> 5. Monitoring
     """
 
-    def __init__(self, api_key: str, workspace_path: str = "/tmp/agent-workspace"):
+    def __init__(self, api_key: str, workspace_path: str = "/tmp/agent-workspace",
+                 settings: Optional[Settings] = None):
         self.api_key = api_key
         self.workspace_path = workspace_path
+        self.settings = settings or Settings(anthropic_api_key=api_key, workspace_path=workspace_path)
         self.pipeline_state = {
             "status": "initialized",
             "current_stage": None,
@@ -35,7 +38,7 @@ class PipelineOrchestrator:
         }
 
     def _create_agent(self, agent_type: str):
-        """Create an agent instance."""
+        """Create an agent instance with the configured provider and model."""
         agents = {
             "architect": ArchitectAgent,
             "coding": CodingAgent,
@@ -47,7 +50,30 @@ class PipelineOrchestrator:
         if agent_type not in agents:
             raise ValueError(f"Unknown agent type: {agent_type}")
 
-        return agents[agent_type](self.api_key, self.workspace_path)
+        # Get model configuration for this specific agent type
+        model_config = self.settings.get_model_for_agent(agent_type)
+        provider, model = self.settings.parse_model_config(model_config)
+
+        # Get API key for the provider
+        api_key = self.settings.get_api_key_for_provider(provider)
+        if not api_key:
+            raise ValueError(f"No API key found for provider '{provider}'. Please set {provider.upper()}_API_KEY in config.")
+
+        # Create agent with provider and model
+        agent = agents[agent_type](
+            api_key=api_key,
+            workspace_path=self.workspace_path,
+            provider=provider,
+            model=model
+        )
+
+        # Set additional configuration
+        agent.max_iterations = self.settings.max_iterations
+        agent.output_truncate_length = self.settings.output_truncate_length
+
+        print(f"[ORCHESTRATOR] Created {agent_type} agent with {provider}:{model}")
+
+        return agent
 
     def _save_state(self, output_dir: str = None):
         """Save pipeline state to file."""

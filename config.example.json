@@ -1,0 +1,60 @@
+{
+  "_comment": "AI Agent Pipeline Configuration - Multi-Provider Support",
+  "_note": "You only need to provide API keys for the providers you plan to use",
+
+  "anthropic_api_key": "your-anthropic-api-key-here",
+  "gemini_api_key": "your-gemini-api-key-here-optional",
+  "grok_api_key": "your-grok-api-key-here-optional",
+  "groq_api_key": "your-groq-api-key-here-optional",
+
+  "anthropic_model": "claude-sonnet-4-20250514",
+  "docker_image": "coding-agent-sandbox",
+  "workspace_path": "/tmp/agent-workspace",
+  "max_iterations": 20,
+  "output_truncate_length": 5000,
+  "default_output_dir": "./pipeline_output",
+  "save_intermediate_results": true,
+  "health_check_timeout": 10,
+  "log_analysis_lines": 100,
+  "coverage_threshold": 80.0,
+  "run_security_scans": true,
+  "default_deployment_platform": "docker",
+  "deployment_environments": [
+    "dev",
+    "staging",
+    "production"
+  ],
+
+  "agent_models": {
+    "_format": "Use 'provider:model' format, e.g., 'anthropic:claude-sonnet-4-20250514'",
+    "architect": "anthropic:claude-sonnet-4-20250514",
+    "coding": "anthropic:claude-sonnet-4-20250514",
+    "testing": "anthropic:claude-sonnet-4-20250514",
+    "deployment": "anthropic:claude-sonnet-4-20250514",
+    "monitoring": "anthropic:claude-sonnet-4-20250514",
+
+    "_examples": {
+      "cost_optimized": {
+        "architect": "anthropic:claude-sonnet-4-20250514",
+        "coding": "anthropic:claude-sonnet-4-20250514",
+        "testing": "groq:llama-3.3-70b-versatile",
+        "deployment": "gemini:gemini-2.0-flash-exp",
+        "monitoring": "groq:llama-3.3-70b-versatile"
+      },
+      "high_performance": {
+        "architect": "gemini:gemini-1.5-pro",
+        "coding": "gemini:gemini-2.0-flash-exp",
+        "testing": "groq:llama-3.3-70b-versatile",
+        "deployment": "groq:mixtral-8x7b-32768",
+        "monitoring": "groq:llama-3.3-70b-versatile"
+      },
+      "mixed_providers": {
+        "architect": "anthropic:claude-opus-4-20250514",
+        "coding": "anthropic:claude-sonnet-4-20250514",
+        "testing": "groq:llama-3.3-70b-versatile",
+        "deployment": "gemini:gemini-2.0-flash-exp",
+        "monitoring": "grok:grok-beta"
+      }
+    }
+  }
+}

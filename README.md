@@ -36,12 +36,70 @@ Coordinates agent workflows with three execution modes:
 - **Full Pipeline**: Complete development workflow from requirements to monitoring
 - **Partial Pipeline**: Run specific stages (e.g., just coding + testing)
 - **Code Review**: Architecture review + code review + QA
+```mermaid
+flowchart TD
+    Start([New Feature Request]) --> Architect[Architecture Agent]
+    
+    Architect --> |Design Specs| ArchReview{Architecture Review}
+    ArchReview --> |Needs Revision| Architect
+    ArchReview --> |Approved| Coding[Coding Agent]
+    
+    Coding --> |Source Code| CodeReview[Code Review Agent]
+    CodeReview --> |Issues Found| Coding
+    CodeReview --> |Passes Review| Testing[Testing Agent]
+    
+    Testing --> |Unit Tests| TestResults{Tests Pass?}
+    TestResults --> |Failed| Coding
+    TestResults --> |Passed| QA[QA Agent]
+    
+    QA --> |Integration Tests<br/>E2E Tests<br/>Performance Tests| QAResults{QA Pass?}
+    QAResults --> |Failed| Coding
+    QAResults --> |Passed| Docs[Documentation Agent]
+    
+    Docs --> |API Docs<br/>User Guides<br/>Release Notes| DocsReview{Docs Complete?}
+    DocsReview --> |Incomplete| Docs
+    DocsReview --> |Complete| Deployment[Deployment Agent]
+    
+    Deployment --> |Deploy to Staging| StagingTest{Staging Validation}
+    StagingTest --> |Failed| Coding
+    StagingTest --> |Passed| ProdDeploy[Deploy to Production]
+    
+    ProdDeploy --> Monitoring[Monitoring Agent]
+    
+    Monitoring --> |Continuous Monitoring| HealthCheck{System Health?}
+    HealthCheck --> |Errors Detected| Alert[Alert & Create Incident]
+    HealthCheck --> |Healthy| Monitoring
+    
+    Alert --> HumanReview{Human Review Required?}
+    HumanReview --> |Auto-Fix| Coding
+    HumanReview --> |Manual Intervention| Human[Human Developer]
+    Human --> End([Resolution])
+    
+    HealthCheck --> |All Good| End
+    
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style Architect fill:#87CEEB
+    style Coding fill:#87CEEB
+    style Testing fill:#87CEEB
+    style QA fill:#87CEEB
+    style Docs fill:#87CEEB
+    style Deployment fill:#87CEEB
+    style Monitoring fill:#FFD700
+    style Alert fill:#FF6B6B
+```
+
+
 
 ## 📋 Prerequisites
 
 - **Python 3.8+**
 - **Docker Engine 20.10+**
-- **Anthropic API Key** ([Get one here](https://console.anthropic.com/))
+- **AI Provider API Key** - At least one of:
+  - [Anthropic Claude](https://console.anthropic.com/) (recommended)
+  - [Google Gemini](https://aistudio.google.com/app/apikey)
+  - [xAI Grok](https://console.x.ai/)
+  - [Groq](https://console.groq.com/)
 - **Git**
 
 ### System Requirements
@@ -84,9 +142,39 @@ python main.py run --requirements "Create a REST API for a todo app with user au
 # Results will be saved to ./pipeline_output/
 ```
 
+## 🌐 Web Interface
+
+**NEW!** Launch the web interface for real-time monitoring and control:
+
+```bash
+python web/app.py
+```
+
+Then open `http://localhost:5000` in your browser to:
+
+- 👀 **Monitor agents in real-time** - See live status updates
+- 🚀 **Submit feature requests** - Queue and manage work
+- 💬 **Send prompts to agents** - Direct agent interaction
+- ⚙️ **Edit configuration** - Change models and settings
+- 📊 **View live logs** - Real-time activity feed
+
+See **[WEB_INTERFACE.md](WEB_INTERFACE.md)** for complete documentation.
+
 ## 💡 Usage Examples
 
-### Full Pipeline
+### Web Interface (Recommended)
+
+```bash
+# Start the web server
+python web/app.py
+
+# Open browser to http://localhost:5000
+# Use the dashboard to monitor and control agents
+```
+
+### Command Line
+
+#### Full Pipeline
 
 ```bash
 python main.py run --requirements "Build a microservice for user authentication with JWT tokens"
@@ -173,30 +261,47 @@ code-agent/
 ├── main.py                   # CLI entry point
 ├── requirements.txt          # Python dependencies
 ├── README.md                 # This file
+├── CONFIG.md                 # Configuration guide
 ├── CLAUDE.md                 # Development guide
 └── DEPLOYMENT.md             # Deployment strategies
 ```
 
 ## ⚙️ Configuration
 
+### 🆕 Multi-Provider Support
+
+The pipeline now supports **multiple AI providers**! Mix and match models from:
+- **Anthropic Claude** - Best reasoning and code quality
+- **Google Gemini** - Fast and cost-effective
+- **xAI Grok** - Real-time information
+- **Groq** - Ultra-fast inference
+
 Configuration can be provided via:
 
 1. **JSON file** (highest priority):
 ```json
 {
-  "anthropic_api_key": "your-key",
-  "anthropic_model": "claude-sonnet-4-20250514",
+  "anthropic_api_key": "sk-ant-xxxxx",
+  "gemini_api_key": "AIzaSyxxxxx",
+  "groq_api_key": "gsk_xxxxx",
   "workspace_path": "/tmp/agent-workspace",
-  "max_iterations": 20
+  "max_iterations": 20,
+  "agent_models": {
+    "architect": "anthropic:claude-opus-4-20250514",
+    "coding": "anthropic:claude-sonnet-4-20250514",
+    "testing": "groq:llama-3.3-70b-versatile",
+    "deployment": "gemini:gemini-2.0-flash-exp",
+    "monitoring": "groq:llama-3.3-70b-versatile"
+  }
 }
 ```
 
 2. **Environment variables**:
 ```bash
-export ANTHROPIC_API_KEY="your-key"
-export ANTHROPIC_MODEL="claude-sonnet-4-20250514"
+export ANTHROPIC_API_KEY="sk-ant-xxxxx"
+export GEMINI_API_KEY="AIzaSyxxxxx"
+export GROQ_API_KEY="gsk_xxxxx"
 export WORKSPACE_PATH="/tmp/agent-workspace"
-export MAX_ITERATIONS="20"
 ```
 
 3. **Programmatic**:
@@ -205,9 +310,33 @@ from config import Settings
 
 settings = Settings(
     anthropic_api_key="your-key",
-    anthropic_model="claude-sonnet-4-20250514"
+    gemini_api_key="your-gemini-key",
+    groq_api_key="your-groq-key",
+    agent_models={
+        "architect": "anthropic:claude-opus-4-20250514",
+        "coding": "anthropic:claude-sonnet-4-20250514",
+        "testing": "groq:llama-3.3-70b-versatile"
+    }
 )
 ```
+
+### Working with Repositories
+
+**Existing repository**:
+```bash
+python main.py run \
+  --requirements "Add authentication" \
+  --repo-url https://github.com/username/my-project
+```
+
+**New project** (omit --repo-url):
+```bash
+python main.py run --requirements "Build a REST API"
+```
+
+**For detailed configuration**:
+- **[CONFIG.md](CONFIG.md)** - Basic configuration guide
+- **[CONFIG_MULTI_PROVIDER.md](CONFIG_MULTI_PROVIDER.md)** - Multi-provider setup, model comparison, cost optimization
 
 ## 🚢 Deployment
 
@@ -318,6 +447,10 @@ See [LICENSE](LICENSE) file for details.
 
 ## 📚 Documentation
 
+- **[WEB_INTERFACE.md](WEB_INTERFACE.md)**: Web interface guide (monitoring, control, real-time updates)
+- **[CONFIG.md](CONFIG.md)**: Basic configuration guide
+- **[CONFIG_MULTI_PROVIDER.md](CONFIG_MULTI_PROVIDER.md)**: Multi-provider setup, model comparison, optimization
+- **[MIGRATION.md](MIGRATION.md)**: Migration guide for multi-provider support
 - **[CLAUDE.md](CLAUDE.md)**: Developer guide for working with this codebase
 - **[DEPLOYMENT.md](DEPLOYMENT.md)**: Comprehensive deployment strategies and guides
 - **[examples/](examples/)**: Example usage scripts
