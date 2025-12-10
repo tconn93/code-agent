@@ -144,6 +144,8 @@ class BaseAgent(ABC):
 
     def list_directory(self, path: str = ".") -> str:
         """List directory structure."""
+        if not self.container:
+            self.setup_sandbox()
         result = self.run_command(f"find {path} -type f -o -type d | head -100")
         return result['stdout']
 
