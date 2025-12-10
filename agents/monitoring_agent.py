@@ -15,6 +15,14 @@ class MonitoringAgent(BaseAgent):
     - Alerting and incident response
     """
 
+    def __init__(self, api_key: str = None, provider: str = None, model: str = None,
+                 docker_image: str = "coding-agent-sandbox",
+                 max_iterations: int = 20, output_truncate_length: int = 5000):
+        """
+        Initialize MonitoringAgent.
+        """
+        super().__init__(api_key, provider, model, docker_image, max_iterations, output_truncate_length)
+
     @property
     def agent_name(self) -> str:
         return "MonitoringAgent"
@@ -24,7 +32,7 @@ class MonitoringAgent(BaseAgent):
         return "Monitoring & Observability"
 
     def get_system_prompt(self) -> str:
-        return """You are an expert SRE agent specializing in monitoring and observability.
+        return f"""You are an expert SRE agent specializing in monitoring and observability.
 
 Your responsibilities:
 1. MONITORING SETUP:

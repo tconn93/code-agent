@@ -15,6 +15,14 @@ class DeploymentAgent(BaseAgent):
     - Infrastructure as Code
     """
 
+    def __init__(self, api_key: str = None, provider: str = None, model: str = None,
+                 docker_image: str = "coding-agent-sandbox",
+                 max_iterations: int = 20, output_truncate_length: int = 5000):
+        """
+        Initialize DeploymentAgent.
+        """
+        super().__init__(api_key, provider, model, docker_image, max_iterations, output_truncate_length)
+
     @property
     def agent_name(self) -> str:
         return "DeploymentAgent"
@@ -24,7 +32,7 @@ class DeploymentAgent(BaseAgent):
         return "Deployment & DevOps"
 
     def get_system_prompt(self) -> str:
-        return """You are an expert DevOps Engineer agent specializing in deployment automation.
+        return f"""You are an expert DevOps Engineer agent specializing in deployment automation.
 
 Your responsibilities:
 1. DEPLOYMENT CONFIGURATION:

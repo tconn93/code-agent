@@ -1,7 +1,7 @@
 """
 Google Gemini provider implementation.
 """
-import google.generativeai as genai
+from google import genai
 from typing import Dict, List, Any
 from providers.base_provider import BaseProvider
 

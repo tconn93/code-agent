@@ -1,490 +1,401 @@
-# AI Agent Software Development Pipeline
+# AI Agent Platform
 
-A comprehensive multi-agent system for autonomous software development, powered by Claude AI. This system orchestrates specialized AI agents through a complete development pipeline from architecture design to deployment and monitoring.
+A scalable multi-agent platform for automating software development tasks. The system uses specialized AI agents (architect, coding, testing, deployment, monitoring) orchestrated through a central API with a web-based UI.
 
-## 🚀 Overview
-
-This project provides a production-ready pipeline of AI agents that can:
-
-- **Design** system architecture and technical specifications
-- **Implement** features and fix bugs
-- **Test** code comprehensively with unit, integration, and e2e tests
-- **Deploy** applications to various environments
-- **Monitor** system health and performance
-
-Each agent operates in an isolated Docker sandbox, ensuring safe execution while maintaining the ability to share artifacts through a common workspace.
-
-## 🏗️ Architecture
+## Architecture
 
 ```
-Requirements → Architect → Coding → Testing → Deployment → Monitoring
-                  ↓          ↓         ↓          ↓            ↓
-              Design Docs  Code    Tests      Deploy      Health Checks
+┌─────────────┐
+│   Frontend  │ (React + Vite)
+│  Dashboard  │
+└──────┬──────┘
+       │ HTTP
+┌──────▼──────┐
+│  API Server │ (FastAPI)
+│ Orchestrator│
+└──────┬──────┘
+       │
+   ┌───┴────┐
+   │        │
+   ▼        ▼
+┌──────┐ ┌──────────┐
+│Redis │ │PostgreSQL│
+│Queue │ │ Database │
+└───┬──┘ └──────────┘
+    │
+    ▼
+┌──────────┐
+│  Worker  │ (Agent Processor)
+│  Pools   │
+└──────────┘
+    │
+    ▼
+┌──────────┐
+│  Agents  │
+│ ┌──────┐ │
+│ │Coding│ │
+│ │Test  │ │
+│ │Deploy│ │
+│ └──────┘ │
+└──────────┘
 ```
 
-### Specialized Agents
+## Core Components
 
-1. **ArchitectAgent**: System design, architecture review, technical specifications
-2. **CodingAgent**: Feature implementation, code review, bug fixes
-3. **TestingAgent**: Test creation, QA, coverage analysis, security scans
-4. **DeploymentAgent**: Build, package, deploy to environments, CI/CD
-5. **MonitoringAgent**: Health checks, log analysis, performance monitoring
+### 1. API Server (`services/api/`)
+- **Technology**: FastAPI with SQLAlchemy ORM
+- **Responsibilities**:
+  - Enterprise project management with governance and compliance
+  - User and team management with role-based access control
+  - Agent registry and lifecycle management with performance tracking
+  - Job creation and dispatch with SLA management
+  - Comprehensive audit logging and compliance reporting
+  - RESTful API endpoints for enterprise frontend
 
-### Pipeline Orchestrator
+### 2. Database (PostgreSQL)
+- **Entities**:
+  - `Project`: Software projects with repo URLs
+  - `Agent`: Worker instances (type, status, provider, model)
+  - `Job`: Tasks assigned to agents (type, payload, status, results)
+  - `Artifact`: Generated files and outputs
+  - `SystemConfig`: Platform configuration
 
-Coordinates agent workflows with three execution modes:
-- **Full Pipeline**: Complete development workflow from requirements to monitoring
-- **Partial Pipeline**: Run specific stages (e.g., just coding + testing)
-- **Code Review**: Architecture review + code review + QA
-```mermaid
-flowchart TD
-    Start([New Feature Request]) --> Architect[Architecture Agent]
-    
-    Architect --> |Design Specs| ArchReview{Architecture Review}
-    ArchReview --> |Needs Revision| Architect
-    ArchReview --> |Approved| Coding[Coding Agent]
-    
-    Coding --> |Source Code| CodeReview[Code Review Agent]
-    CodeReview --> |Issues Found| Coding
-    CodeReview --> |Passes Review| Testing[Testing Agent]
-    
-    Testing --> |Unit Tests| TestResults{Tests Pass?}
-    TestResults --> |Failed| Coding
-    TestResults --> |Passed| QA[QA Agent]
-    
-    QA --> |Integration Tests<br/>E2E Tests<br/>Performance Tests| QAResults{QA Pass?}
-    QAResults --> |Failed| Coding
-    QAResults --> |Passed| Docs[Documentation Agent]
-    
-    Docs --> |API Docs<br/>User Guides<br/>Release Notes| DocsReview{Docs Complete?}
-    DocsReview --> |Incomplete| Docs
-    DocsReview --> |Complete| Deployment[Deployment Agent]
-    
-    Deployment --> |Deploy to Staging| StagingTest{Staging Validation}
-    StagingTest --> |Failed| Coding
-    StagingTest --> |Passed| ProdDeploy[Deploy to Production]
-    
-    ProdDeploy --> Monitoring[Monitoring Agent]
-    
-    Monitoring --> |Continuous Monitoring| HealthCheck{System Health?}
-    HealthCheck --> |Errors Detected| Alert[Alert & Create Incident]
-    HealthCheck --> |Healthy| Monitoring
-    
-    Alert --> HumanReview{Human Review Required?}
-    HumanReview --> |Auto-Fix| Coding
-    HumanReview --> |Manual Intervention| Human[Human Developer]
-    Human --> End([Resolution])
-    
-    HealthCheck --> |All Good| End
-    
-    style Start fill:#90EE90
-    style End fill:#FFB6C1
-    style Architect fill:#87CEEB
-    style Coding fill:#87CEEB
-    style Testing fill:#87CEEB
-    style QA fill:#87CEEB
-    style Docs fill:#87CEEB
-    style Deployment fill:#87CEEB
-    style Monitoring fill:#FFD700
-    style Alert fill:#FF6B6B
-```
+### 3. Worker Service (`services/worker/`)
+- **Function**: Processes jobs from Redis queue
+- **Workflow**:
+  1. Poll Redis for pending jobs
+  2. Fetch job details from database
+  3. Instantiate appropriate agent (coding, testing, etc.)
+  4. Execute agent with job payload
+  5. Update job status and results in database
 
+### 4. Agent Classes (`agents/`)
+Specialized agents for different development tasks:
+- **ArchitectAgent**: System design, architecture reviews
+- **CodingAgent**: Feature implementation, code reviews
+- **TestingAgent**: Test creation, QA automation
+- **DeploymentAgent**: CI/CD setup, containerization
+- **MonitoringAgent**: Observability, health checks
 
+### 5. Frontend (`frontend/`)
+- **Technology**: React 19 + React Router + Tailwind CSS
+- **Pages**:
+  - Projects: Create and manage projects
+  - Agents: View and spawn agent workers
+  - Jobs: Monitor task execution
+  - Settings: Configure API keys and system settings
 
-## 📋 Prerequisites
+### 6. Pipeline Orchestrator (`pipelines/orchestrator.py`)
+- Coordinates multi-stage workflows
+- Manages agent lifecycle and task handoff
+- Supports full pipeline or partial stage execution
 
-- **Python 3.8+**
-- **Docker Engine 20.10+**
-- **AI Provider API Key** - At least one of:
-  - [Anthropic Claude](https://console.anthropic.com/) (recommended)
-  - [Google Gemini](https://aistudio.google.com/app/apikey)
-  - [xAI Grok](https://console.x.ai/)
-  - [Groq](https://console.groq.com/)
-- **Git**
+## Getting Started
 
-### System Requirements
-- **Minimum**: 4 CPU cores, 8GB RAM, 50GB storage
-- **Recommended**: 8 CPU cores, 16GB RAM, 100GB SSD
+### Prerequisites
+- Docker and Docker Compose
+- Python 3.11+
+- Node.js 18+ (for frontend development)
+- PostgreSQL 15+
+- Redis 7+
 
-## 🚀 Quick Start
+### Environment Setup
 
-### 1. Installation
-
+1. **Clone the repository**
 ```bash
-# Clone the repository
-git clone <your-repo-url>
+git clone <repo-url>
 cd code-agent
+```
 
-# Install Python dependencies
+2. **Create `.env` file**
+```bash
+cat > .env << EOF
+# API Keys
+ANTHROPIC_API_KEY=your_anthropic_key_here
+OPENAI_API_KEY=your_openai_key_here  # Optional
+GOOGLE_API_KEY=your_google_key_here  # Optional
+GROQ_API_KEY=your_groq_key_here      # Optional
+
+# Database
+DATABASE_URL=postgresql://agent_user:agent_password@db:5432/agent_platform
+
+# Redis
+REDIS_URL=redis://redis:6379/0
+EOF
+```
+
+3. **Start the platform**
+```bash
+docker-compose -f docker-compose.v2.yml up --build
+```
+
+This will start:
+- PostgreSQL on port 5432
+- Redis on port 6379
+- API Server on port 8000
+- Worker service (background)
+
+4. **Start the frontend** (in a separate terminal)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend will be available at http://localhost:5173
+
+### Manual Setup (Without Docker)
+
+1. **Install Python dependencies**
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Build the Docker sandbox image
-docker build -t coding-agent-sandbox .
 ```
 
-### 2. Configuration
-
+2. **Start PostgreSQL and Redis**
 ```bash
-# Create default configuration
-python main.py init
-
-# Edit config.json and add your Anthropic API key
-# OR set environment variable
-export ANTHROPIC_API_KEY="your-api-key-here"
+# Using system services or Docker
+docker run -d -p 5432:5432 -e POSTGRES_DB=agent_platform -e POSTGRES_USER=agent_user -e POSTGRES_PASSWORD=agent_password postgres:15-alpine
+docker run -d -p 6379:6379 redis:7-alpine
 ```
 
-### 3. Run Your First Pipeline
-
+3. **Run database migrations**
 ```bash
-# Run full development pipeline
-python main.py run --requirements "Create a REST API for a todo app with user authentication"
-
-# Results will be saved to ./pipeline_output/
+# The API will create tables automatically on first run
 ```
 
-## 🌐 Web Interface
-
-**NEW!** Launch the web interface for real-time monitoring and control:
-
+4. **Start the API server**
 ```bash
-python web/app.py
+export DATABASE_URL="postgresql://agent_user:agent_password@localhost:5432/agent_platform"
+export REDIS_URL="redis://localhost:6379/0"
+export ANTHROPIC_API_KEY="your_key_here"
+uvicorn services.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Then open `http://localhost:5000` in your browser to:
-
-- 👀 **Monitor agents in real-time** - See live status updates
-- 🚀 **Submit feature requests** - Queue and manage work
-- 💬 **Send prompts to agents** - Direct agent interaction
-- ⚙️ **Edit configuration** - Change models and settings
-- 📊 **View live logs** - Real-time activity feed
-
-See **[WEB_INTERFACE.md](WEB_INTERFACE.md)** for complete documentation.
-
-## 💡 Usage Examples
-
-### Web Interface (Recommended)
-
+5. **Start the worker**
 ```bash
-# Start the web server
-python web/app.py
-
-# Open browser to http://localhost:5000
-# Use the dashboard to monitor and control agents
+python services/worker/main.py
 ```
 
-### Command Line
-
-#### Full Pipeline
-
+6. **Start the frontend**
 ```bash
-python main.py run --requirements "Build a microservice for user authentication with JWT tokens"
+cd frontend
+npm install
+npm run dev
 ```
 
-### Specific Stages
+## API Endpoints
 
+### Projects
+- `POST /projects/` - Create a new project
+- `GET /projects/` - List all projects
+- `GET /projects/{id}` - Get project details
+- `GET /projects/{id}/jobs` - Get project jobs
+
+### Agents
+- `POST /agents/` - Spawn a new agent worker
+- `GET /agents/` - List all agents
+
+### Jobs
+- `POST /jobs/` - Create and dispatch a job
+- `GET /jobs/` - List all jobs
+- `GET /jobs/{id}` - Get job details and status
+
+### Settings
+- `POST /settings/` - Save configuration
+- `GET /settings/` - Retrieve settings
+
+## Usage Examples
+
+### 1. Create a Project
 ```bash
-# Create tasks.json
-echo '{
-  "coding": "Implement JWT authentication middleware",
-  "testing": "Create unit and integration tests for auth"
-}' > tasks.json
-
-python main.py run-stages --stages coding testing --tasks tasks.json
+curl -X POST http://localhost:8000/projects/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Web App",
+    "description": "E-commerce platform",
+    "repo_url": "https://github.com/user/repo"
+  }'
 ```
 
-### Code Review
-
+### 2. Spawn an Agent
 ```bash
-python main.py review --repo-url https://github.com/user/repo \
-  --focus security performance "test coverage"
+curl -X POST http://localhost:8000/agents/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "coding-agent-1",
+    "type": "coding",
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022"
+  }'
 ```
 
-### Programmatic Usage
-
-```python
-from config import Settings
-from pipelines import PipelineOrchestrator
-
-# Initialize
-settings = Settings.from_env()
-orchestrator = PipelineOrchestrator(
-    api_key=settings.anthropic_api_key,
-    workspace_path=settings.workspace_path
-)
-
-# Run full pipeline
-result = orchestrator.run_full_pipeline(
-    requirements="Your project requirements here",
-    output_dir="./output"
-)
-
-print(f"Status: {result['status']}")
-print(f"Completed stages: {result['stages_completed']}")
+### 3. Create a Job
+```bash
+curl -X POST http://localhost:8000/jobs/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": 1,
+    "type": "implement_feature",
+    "payload": {
+      "task": "Add user authentication with JWT",
+      "requirements": "Use FastAPI dependencies for auth"
+    }
+  }'
 ```
 
-### Individual Agent Usage
+## Agent Types and Job Types
 
-```python
-from agents import CodingAgent, TestingAgent
+### Agent Types
+- `architect` - System design and architecture
+- `coding` - Feature implementation
+- `testing` - Test creation and QA
+- `deployment` - CI/CD and infrastructure
+- `monitoring` - Observability and health checks
 
-# Use Coding Agent
-with CodingAgent(api_key) as coder:
-    coder.setup_sandbox(repo_url="https://github.com/user/repo")
-    result = coder.implement_feature(
-        feature_spec="Add dark mode toggle to the UI"
-    )
+### Job Types
+- `design_system` - Architecture design
+- `implement_feature` - Code implementation
+- `create_tests` - Test generation
+- `setup_deployment` - Deployment configuration
+- `setup_monitoring` - Monitoring setup
+- `review_code` - Code review
+- `run_qa_suite` - Quality assurance
 
-# Use Testing Agent
-with TestingAgent(api_key) as tester:
-    tester.setup_sandbox(repo_url="https://github.com/user/repo")
-    result = tester.run_qa_suite()
-```
+## Development
 
-## 📁 Project Structure
-
+### Project Structure
 ```
 code-agent/
-├── agents/                    # Specialized AI agents
-│   ├── base_agent.py         # Abstract base class
-│   ├── architect_agent.py    # Architecture & design
-│   ├── coding_agent.py       # Implementation & review
-│   ├── testing_agent.py      # Testing & QA
-│   ├── deployment_agent.py   # Deployment & DevOps
-│   └── monitoring_agent.py   # Monitoring & observability
-├── pipelines/                 # Orchestration
-│   └── orchestrator.py       # Pipeline coordinator
-├── config/                    # Configuration management
-│   └── settings.py           # Settings and config loading
-├── examples/                  # Usage examples
-│   └── example_usage.py      # Example scripts
-├── Dockerfile                 # Sandbox container definition
-├── main.py                   # CLI entry point
-├── requirements.txt          # Python dependencies
-├── README.md                 # This file
-├── CONFIG.md                 # Configuration guide
-├── CLAUDE.md                 # Development guide
-└── DEPLOYMENT.md             # Deployment strategies
+├── agents/                 # Agent implementations
+│   ├── base_agent.py      # Base agent class
+│   ├── architect_agent.py
+│   ├── coding_agent.py
+│   ├── testing_agent.py
+│   ├── deployment_agent.py
+│   └── monitoring_agent.py
+├── pipelines/             # Orchestration logic
+│   └── orchestrator.py
+├── services/
+│   ├── api/               # FastAPI backend
+│   │   ├── main.py       # API endpoints
+│   │   ├── models.py     # SQLAlchemy models
+│   │   └── database.py   # DB configuration
+│   └── worker/            # Job processor
+│       └── main.py       # Worker loop
+├── frontend/              # React UI
+│   ├── src/
+│   │   ├── pages/        # Page components
+│   │   ├── App.jsx
+│   │   └── api.js        # API client
+│   └── package.json
+├── config/                # Configuration
+├── docker-compose.v2.yml  # Docker setup
+├── requirements.txt       # Python dependencies
+└── README.md
 ```
 
-## ⚙️ Configuration
+### Adding a New Agent Type
 
-### 🆕 Multi-Provider Support
-
-The pipeline now supports **multiple AI providers**! Mix and match models from:
-- **Anthropic Claude** - Best reasoning and code quality
-- **Google Gemini** - Fast and cost-effective
-- **xAI Grok** - Real-time information
-- **Groq** - Ultra-fast inference
-
-Configuration can be provided via:
-
-1. **JSON file** (highest priority):
-```json
-{
-  "anthropic_api_key": "sk-ant-xxxxx",
-  "gemini_api_key": "AIzaSyxxxxx",
-  "groq_api_key": "gsk_xxxxx",
-  "workspace_path": "/tmp/agent-workspace",
-  "max_iterations": 20,
-  "agent_models": {
-    "architect": "anthropic:claude-opus-4-20250514",
-    "coding": "anthropic:claude-sonnet-4-20250514",
-    "testing": "groq:llama-3.3-70b-versatile",
-    "deployment": "gemini:gemini-2.0-flash-exp",
-    "monitoring": "groq:llama-3.3-70b-versatile"
-  }
-}
-```
-
-2. **Environment variables**:
-```bash
-export ANTHROPIC_API_KEY="sk-ant-xxxxx"
-export GEMINI_API_KEY="AIzaSyxxxxx"
-export GROQ_API_KEY="gsk_xxxxx"
-export WORKSPACE_PATH="/tmp/agent-workspace"
-```
-
-3. **Programmatic**:
+1. Create agent class in `agents/`:
 ```python
-from config import Settings
+from agents.base_agent import BaseAgent
 
-settings = Settings(
-    anthropic_api_key="your-key",
-    gemini_api_key="your-gemini-key",
-    groq_api_key="your-groq-key",
-    agent_models={
-        "architect": "anthropic:claude-opus-4-20250514",
-        "coding": "anthropic:claude-sonnet-4-20250514",
-        "testing": "groq:llama-3.3-70b-versatile"
-    }
-)
+class MyAgent(BaseAgent):
+    @property
+    def agent_name(self) -> str:
+        return "MyAgent"
+
+    def get_system_prompt(self) -> str:
+        return "You are an expert in..."
+
+    # Implement agent-specific methods
 ```
 
-### Working with Repositories
+2. Register in orchestrator
+3. Update API to support new agent type
+4. Add UI components for the new agent
 
-**Existing repository**:
+## Configuration
+
+### AI Provider Configuration
+The platform supports multiple AI providers:
+- **Anthropic** (Claude): `ANTHROPIC_API_KEY`
+- **OpenAI** (GPT): `OPENAI_API_KEY`
+- **Google** (Gemini): `GOOGLE_API_KEY`
+- **Groq**: `GROQ_API_KEY`
+
+Configure per-agent via the `provider` and `model` fields when creating agents.
+
+### Worker Configuration
+Workers can be scaled horizontally by running multiple instances:
 ```bash
-python main.py run \
-  --requirements "Add authentication" \
-  --repo-url https://github.com/username/my-project
+docker-compose -f docker-compose.v2.yml up --scale worker=5
 ```
 
-**New project** (omit --repo-url):
+## Monitoring and Logs
+
+### API Logs
 ```bash
-python main.py run --requirements "Build a REST API"
+docker-compose -f docker-compose.v2.yml logs -f api
 ```
 
-**For detailed configuration**:
-- **[CONFIG.md](CONFIG.md)** - Basic configuration guide
-- **[CONFIG_MULTI_PROVIDER.md](CONFIG_MULTI_PROVIDER.md)** - Multi-provider setup, model comparison, cost optimization
-
-## 🚢 Deployment
-
-This system can be deployed in multiple ways:
-
-### Local Development
+### Worker Logs
 ```bash
-python main.py run --requirements "..."
+docker-compose -f docker-compose.v2.yml logs -f worker
 ```
 
-### Docker
+### Database Access
 ```bash
-docker build -t ai-agent-pipeline .
-docker run -v /var/run/docker.sock:/var/run/docker.sock \
-  -e ANTHROPIC_API_KEY="your-key" \
-  ai-agent-pipeline run --requirements "..."
+docker-compose -f docker-compose.v2.yml exec db psql -U agent_user -d agent_platform
 ```
 
-### Docker Compose
+### Redis CLI
 ```bash
-docker-compose up -d
+docker-compose -f docker-compose.v2.yml exec redis redis-cli
 ```
 
-### Kubernetes
-```bash
-kubectl apply -f k8s/
-```
+## Troubleshooting
 
-For comprehensive deployment strategies including cloud deployments (AWS, GCP, Azure), CI/CD integration, and scaling, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+### Worker not processing jobs
+1. Check Redis connection: `redis-cli -u $REDIS_URL ping`
+2. Verify jobs in queue: `redis-cli LLEN job_queue`
+3. Check worker logs for errors
 
-## 🔧 Advanced Features
+### Agent execution fails
+1. Verify API keys are set correctly
+2. Check agent has Docker access (for sandbox)
+3. Review job logs in database
 
-### Shared Workspace
+### Database connection issues
+1. Ensure PostgreSQL is running
+2. Verify `DATABASE_URL` is correct
+3. Check database credentials
 
-Agents share a workspace to pass artifacts:
-```python
-orchestrator = PipelineOrchestrator(
-    api_key=api_key,
-    workspace_path="/shared/workspace"  # Same path for all agents
-)
-```
+## Security Considerations
 
-### Pipeline State Tracking
+- API keys are stored in environment variables, not in database
+- Agent sandboxes use Docker isolation
+- Database credentials should be rotated regularly
+- Use HTTPS in production
+- Implement authentication for API endpoints (future)
 
-Monitor pipeline progress:
-```python
-result = orchestrator.run_full_pipeline(requirements="...")
+## Roadmap
 
-print(result["status"])           # "completed", "failed", "running"
-print(result["current_stage"])    # Current stage or None
-print(result["stages_completed"]) # List of completed stages
-print(result["results"])          # Results from each stage
-```
+- [ ] Worker service implementation
+- [ ] WebSocket support for real-time updates
+- [ ] User authentication and authorization
+- [ ] Multi-tenancy support
+- [ ] Kubernetes deployment manifests
+- [ ] Metrics and observability dashboard
+- [ ] Agent capability plugins
+- [ ] Workflow templates
 
-### Custom Agent Tools
+## License
 
-Extend agents with custom tools:
-```python
-class CustomCodingAgent(CodingAgent):
-    def get_tool_definitions(self):
-        base_tools = super().get_tool_definitions()
-        custom_tools = [
-            {
-                "name": "my_custom_tool",
-                "description": "Does something custom",
-                "input_schema": {...}
-            }
-        ]
-        return base_tools + custom_tools
+[Your License Here]
 
-    def process_tool_call(self, tool_name, tool_input):
-        if tool_name == "my_custom_tool":
-            return self.my_custom_implementation(tool_input)
-        return super().process_tool_call(tool_name, tool_input)
-```
+## Contributing
 
-## 🔒 Security Considerations
-
-- **API Keys**: Never commit API keys. Use environment variables or secrets management.
-- **Sandbox Isolation**: Each agent runs in an isolated Docker container with limited privileges.
-- **Code Review**: All agent-generated code should be reviewed before production deployment.
-- **Resource Limits**: Configure Docker resource limits to prevent resource exhaustion.
-- **Network Isolation**: Use Docker networks to isolate sandboxes.
-
-## 📊 Monitoring & Observability
-
-Track pipeline performance:
-- Pipeline execution time per stage
-- Agent success/failure rates
-- API token usage and costs
-- Resource usage (CPU, memory, disk)
-
-Logs are structured and can be aggregated with ELK stack, CloudWatch, or similar tools.
-
-## 🤝 Contributing
-
-This is a personal project, but suggestions and feedback are welcome!
-
-## 📝 License
-
-See [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Powered by [Claude AI](https://www.anthropic.com/claude) from Anthropic
-- Built with Docker for sandboxed execution
-- Uses Playwright for UI verification
-
-## 📚 Documentation
-
-- **[WEB_INTERFACE.md](WEB_INTERFACE.md)**: Web interface guide (monitoring, control, real-time updates)
-- **[CONFIG.md](CONFIG.md)**: Basic configuration guide
-- **[CONFIG_MULTI_PROVIDER.md](CONFIG_MULTI_PROVIDER.md)**: Multi-provider setup, model comparison, optimization
-- **[MIGRATION.md](MIGRATION.md)**: Migration guide for multi-provider support
-- **[CLAUDE.md](CLAUDE.md)**: Developer guide for working with this codebase
-- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Comprehensive deployment strategies and guides
-- **[examples/](examples/)**: Example usage scripts
-
-## 🐛 Troubleshooting
-
-### Docker Permission Denied
-```bash
-sudo usermod -aG docker $USER
-# Log out and back in
-```
-
-### API Rate Limits
-- Monitor usage in Anthropic Console
-- Adjust `max_iterations` in config to reduce token usage
-- Implement retry logic with exponential backoff
-
-### Container Cleanup
-```bash
-# Remove stopped containers
-docker container prune
-
-# Remove all agent containers
-docker ps -a | grep coding-agent-sandbox | awk '{print $1}' | xargs docker rm
-```
-
-## 📞 Support
-
-For issues or questions:
-1. Check the [CLAUDE.md](CLAUDE.md) for implementation details
-2. Review [DEPLOYMENT.md](DEPLOYMENT.md) for deployment issues
-3. Check Docker and Python logs for errors
-4. Verify Anthropic API key and quota
-
----
-
-**Built with ❤️ using Claude AI**
+[Contributing Guidelines]

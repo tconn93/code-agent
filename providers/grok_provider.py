@@ -9,7 +9,7 @@ from providers.base_provider import BaseProvider
 class GrokProvider(BaseProvider):
     """Provider for xAI's Grok models."""
 
-    def __init__(self, api_key: str, model: str = "grok-beta"):
+    def __init__(self, api_key: str, model: str = "grok-4-1-fast-reasoning"):
         super().__init__(api_key, model)
         self.client = OpenAI(
             api_key=api_key,

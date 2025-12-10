@@ -24,7 +24,7 @@ class BaseAgent(ABC):
     """
 
     def __init__(self, api_key: str, workspace_path: str = "/tmp/agent-workspace",
-                 provider: str = "anthropic", model: str = "claude-sonnet-4-20250514"):
+             provider: str = "anthropic", model: str = "claude-sonnet-4-20250514"):
         """
         Initialize base agent.
 
@@ -47,13 +47,14 @@ class BaseAgent(ABC):
         self.model = model
         self.max_iterations = 20
         self.output_truncate_length = 5000
+        self.docker_image = "coding-agent-sandbox"
 
     def _create_provider(self, provider_name: str, api_key: str, model: str) -> BaseProvider:
         """Create the appropriate provider instance."""
         providers = {
             "anthropic": AnthropicProvider,
             "gemini": GeminiProvider,
-            "grok": GrokProvider,
+            "xai": GrokProvider,
             "groq": GroqProvider,
             "openai": OpenAIProvider
         }
@@ -98,7 +99,7 @@ class BaseAgent(ABC):
         workspace_mount = existing_workspace or self.workspace_path
 
         self.container = self.docker_client.containers.run(
-            "coding-agent-sandbox",
+            self.docker_image,
             detach=True,
             remove=True,
             volumes={
