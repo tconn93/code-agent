@@ -6,6 +6,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+import os
 from providers import (
     BaseProvider,
     AnthropicProvider,
@@ -42,6 +43,9 @@ class BaseAgent(ABC):
 
         # Create provider instance
         self.provider = self._create_provider(provider, api_key, model)
+        self.custom_system_prompt = os.environ.get("AGENT_CUSTOM_PROMPT", "")
+        self.custom_system_prompt = os.environ.get("AGENT_CUSTOM_PROMPT", "")
+        self.custom_system_prompt = os.environ.get("AGENT_CUSTOM_PROMPT")
 
         # Configurable settings (can be overridden after initialization)
         self.model = model
@@ -249,7 +253,7 @@ class BaseAgent(ABC):
         max_iterations = max_iterations or self.max_iterations
         model = model or self.model
 
-        system_prompt = self.get_system_prompt()
+        system_prompt = self.custom_system_prompt or self.get_system_prompt()
         tools = self.get_tool_definitions()
 
         messages = [{

@@ -80,15 +80,16 @@ class Project(Base):
     stakeholders = Column(JSON, nullable=True)
 
     # Relationships
-    jobs = relationship("Job", back_populates="project")
-    artifacts = relationship("Artifact", back_populates="project")
-    owner = relationship("User", foreign_keys=[owner_id])
-    approved_by_user = relationship("User", foreign_keys=[approved_by])
-    updated_by_user = relationship("User", foreign_keys=[updated_by])
-    team = relationship("Team", back_populates="projects")
-    environments = relationship("Environment", back_populates="project")
-    releases = relationship("Release", back_populates="project")
-    audit_logs = relationship("AuditLog", back_populates="project")
+    jobs = relationship("Job", back_populates="project")  # one_to_many: Project has many Jobs
+    sprints = relationship("Sprint", back_populates="project")  # one_to_many: Project has many Sprints
+    artifacts = relationship("Artifact", back_populates="project")  # one_to_many: Project has many Artifacts
+    owner = relationship("User", foreign_keys=[owner_id])  # many_to_one: Project owned by one User
+    approved_by_user = relationship("User", foreign_keys=[approved_by])  # many_to_one: Project approved by one User
+    updated_by_user = relationship("User", foreign_keys=[updated_by])  # many_to_one: Project updated by one User
+    team = relationship("Team", back_populates="projects")  # many_to_one: Project belongs to one Team
+    environments = relationship("Environment", back_populates="project")  # one_to_many: Project has many Environments
+    releases = relationship("Release", back_populates="project")  # one_to_many: Project has many Releases
+    audit_logs = relationship("AuditLog", back_populates="project")  # one_to_many: Project has many AuditLogs
 
 class SystemConfig(Base):
     __tablename__ = "system_configs"
@@ -133,6 +134,7 @@ class Agent(Base):
     average_job_duration = Column(Integer, nullable=True) # seconds
     success_rate = Column(Numeric(5,2), nullable=True) # percentage
     last_job_completed_at = Column(DateTime, nullable=True)
+    custom_system_prompt = Column(Text, nullable=True)
 
     # Security & Compliance
     security_clearance = Column(String, default="standard") # standard, elevated, restricted
@@ -161,68 +163,50 @@ class Agent(Base):
 class Job(Base):
     __tablename__ = "jobs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"))
+    id = Column(Integer, primary_key=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    sprint_id = Column(Integer, ForeignKey("sprints.id"), nullable=True)
+    type = Column(String, nullable=False)
+    status = Column(String, default="pending")
+    payload = Column(JSON)
     assigned_agent_id = Column(Integer, ForeignKey("agents.id"), nullable=True)
-    type = Column(String) # e.g. "implement_feature", "run_tests"
-    status = Column(String, default="pending") # pending, running, completed, failed
-    payload = Column(JSON) # The input arguments for the task
-    result = Column(JSON, nullable=True) # The output of the task
-    logs = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Enterprise Features
-    priority = Column(String, default="medium") # low, medium, high, critical
-    requested_by = Column(Integer, ForeignKey("users.id"), nullable=True) # Who requested the job
-    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True) # Who approved the job
-    approved_at = Column(DateTime, nullable=True)
+    # Relationships
+    project = relationship("Project", back_populates="jobs")  # many_to_one: Job belongs to one Project
+    sprint = relationship("Sprint", back_populates="jobs")  # many_to_one: Job belongs to one Sprint
+    assigned_agent = relationship("Agent")  # many_to_one: Job assigned to one Agent
+    artifacts = relationship("Artifact", back_populates="job")  # one_to_many: Job has many Artifacts
 
-    # Cost & Resource Tracking
-    estimated_cost = Column(Numeric(8,2), nullable=True)
-    actual_cost = Column(Numeric(8,2), nullable=True)
-    estimated_duration = Column(Integer, nullable=True) # minutes
-    actual_duration = Column(Integer, nullable=True) # minutes
+class Sprint(Base):
+    __tablename__ = "sprints"
 
-    # SLA & Quality
-    sla_deadline = Column(DateTime, nullable=True)
-    quality_score = Column(Numeric(5,2), nullable=True) # 0-100
-    review_required = Column(Boolean, default=False)
-    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    reviewed_at = Column(DateTime, nullable=True)
-    review_comments = Column(Text, nullable=True)
+    id = Column(Integer, primary_key=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    name = Column(String, nullable=False)
+    goal = Column(Text)
+    start_date = Column(DateTime)
+    end_date = Column(DateTime)
+    status = Column(String, default="planning")  # planning, active, completed, cancelled
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Security & Compliance
-    security_level = Column(String, default="standard")
-    data_sensitivity = Column(String, nullable=True) # public, internal, confidential
-    compliance_tags = Column(JSON, nullable=True)
-
-    # Operational
-    retry_count = Column(Integer, default=0)
-    max_retries = Column(Integer, default=3)
-    failure_reason = Column(Text, nullable=True)
-    environment = Column(String, nullable=True) # dev, staging, prod
-    tags = Column(JSON, nullable=True) # Custom tags for organization
-
-    # Audit Trail
+    # Audit fields (FK to User for traceability)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Relationships
-    project = relationship("Project", back_populates="jobs")
-    assigned_agent = relationship("Agent")
-    requested_by_user = relationship("User", foreign_keys=[requested_by])
-    approved_by_user = relationship("User", foreign_keys=[approved_by])
-    reviewed_by_user = relationship("User", foreign_keys=[reviewed_by])
-    created_by_user = relationship("User", foreign_keys=[created_by])
-    updated_by_user = relationship("User", foreign_keys=[updated_by])
-    artifacts = relationship("Artifact", back_populates="job")
+    project = relationship("Project", back_populates="sprints")  # many_to_one: Sprint belongs to one Project
+    jobs = relationship("Job", back_populates="sprint")  # one_to_many: Sprint has many Jobs
+    created_by_user = relationship("User", foreign_keys=[created_by])  # many_to_one: Sprint created by one User
+    updated_by_user = relationship("User", foreign_keys=[updated_by])  # many_to_one: Sprint updated by one User
 
 class Artifact(Base):
     __tablename__ = "artifacts"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"))
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=True)
     name = Column(String, index=True)
     path = Column(String) # Path to file
@@ -259,10 +243,11 @@ class Artifact(Base):
     expires_at = Column(DateTime, nullable=True) # For retention policies
 
     # Relationships
-    project = relationship("Project", back_populates="artifacts")
-    job = relationship("Job", back_populates="artifacts")
-    created_by_user = relationship("User", foreign_keys=[created_by])
-    uploaded_by_user = relationship("User", foreign_keys=[uploaded_by])
+    project = relationship("Project", back_populates="artifacts")  # many_to_one: Artifact belongs to one Project
+    job = relationship("Job", back_populates="artifacts")  # many_to_one: Artifact belongs to one Job
+    created_by_user = relationship("User", foreign_keys=[created_by])  # many_to_one: Artifact created by one User
+    uploaded_by_user = relationship("User", foreign_keys=[uploaded_by])  # many_to_one: Artifact uploaded by one User
+
 
 
 class User(Base):

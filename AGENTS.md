@@ -1,39 +1,42 @@
-# Agent Development Guidelines
+# AGENTS.md
 
 ## Build/Lint/Test Commands
 
-**Frontend:**
-- Build: `cd frontend && npm run build`
-- Lint: `cd frontend && npm run lint`
-- Dev: `cd frontend && npm run dev`
+### Frontend (`cd frontend`)
+- Lint: `npm run lint` (eslint . --ext .js,.jsx)
+- Build: `npm run build`
+- Dev: `npm run dev`
+- Preview: `npm run preview`
+- Tests: None configured (add vitest/jest)
 
-**Python:**
+### Backend (root)
+- Deps: `pip install -r requirements.txt`
+- Lint: None (add ruff/black/mypy)
 - Test all: `pytest`
-- Test single file: `pytest path/to/test_file.py`
-- Test single test: `pytest path/to/test_file.py::test_function_name`
-- Coverage: `pytest --cov=.`
-
-**Development:**
-- Full dev setup: `./dev.sh`
+- Single test: `pytest path/to/test_file.py::test_name` or `pytest -k test_name`
+- API dev: `uvicorn services.api.main:app --reload`
+- No tests yet.
 
 ## Code Style Guidelines
 
-**Python:**
-- Follow PEP 8 with type hints and docstrings
-- Naming: snake_case for variables/functions, PascalCase for classes
-- Imports: stdlib → third-party → local (alphabetized within groups)
-- Error handling: Use specific exceptions, log errors appropriately
-- Functions: Keep focused and small (<50 lines)
+### Python (FastAPI/SQLAlchemy/Pydantic)
+- Snake_case vars/functions/classes (e.g. get_user, UserModel)
+- Type hints everywhere
+- Imports: absolute (from services.api.models import User)
+- Group imports: stdlib, 3rd-party, local
+- Error handling: raise HTTPException(status_code=404, detail=&quot;Not found&quot;)
+- Docstrings: Google/numpy style
 
-**JavaScript/React:**
-- Use functional components with hooks
-- Naming: camelCase for variables/functions, PascalCase for components
-- Imports: Group by type (React, third-party, local)
-- JSX: One component per file, meaningful prop names
-- State: Use useState/useEffect appropriately
+### Frontend (React 19/JSX/ Tailwind)
+- PascalCase components (e.g. Agents.jsx)
+- camelCase vars/functions/hooks
+- ESLint: react-hooks recommended, no-unused-vars (ignore ^[A-Z_])
+- Imports: explicit (import { useState } from 'react')
+- Tailwind: utility classes, no custom CSS
+- Axios for API calls (frontend/src/api.js)
 
-**General:**
-- No unused variables (ESLint enforces)
-- Meaningful names over abbreviations
-- Add docstrings/comments for complex logic
-- Follow existing patterns in codebase
+### General
+- No emojis/comments unless requested
+- Mimic existing patterns (e.g. agents/base_agent.py)
+- Security: No secrets in code/DB
+- Commit: Descriptive msgs, no git push

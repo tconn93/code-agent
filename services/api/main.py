@@ -248,7 +248,7 @@ class SystemConfigResponse(SystemConfigCreate):
 class AgentCreate(BaseModel):
     name: str
     type: str
-    provider: str = "anthropic"
+    provider: str = "xai"
     model: Optional[str] = None
     owner_id: Optional[int] = None
     team_id: Optional[int] = None
@@ -260,6 +260,8 @@ class AgentCreate(BaseModel):
     allowed_projects: Optional[List[int]] = None
     compliance_requirements: Optional[Dict[str, Any]] = None
     capabilities: Optional[Dict[str, Any]] = None
+    custom_system_prompt: Optional[str] = None
+    custom_system_prompt: Optional[str] = None
 
 class AgentResponse(AgentCreate):
     id: int
@@ -277,8 +279,7 @@ class AgentResponse(AgentCreate):
     created_at: str
     updated_at: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- API Endpoints ---
@@ -469,6 +470,7 @@ def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
                 "AGENT_ID": str(db_agent.id),
                 "AGENT_PROVIDER": db_agent.provider,
                 "AGENT_MODEL": db_agent.model or "",
+                "AGENT_CUSTOM_PROMPT": db_agent.custom_system_prompt or "",
             }
             
             # Pass through API keys
@@ -530,6 +532,7 @@ def format_agent_response(agent):
         maintenance_reason=agent.maintenance_reason,
         version=agent.version,
         capabilities=agent.capabilities,
+        custom_system_prompt=agent.custom_system_prompt,
         created_at=agent.created_at.isoformat() if agent.created_at else "",
         updated_at=agent.updated_at.isoformat() if agent.updated_at else None
     )
