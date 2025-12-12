@@ -33,3 +33,15 @@ psycopg2-binary==2.9.9
 passlib[bcrypt]>=1.7.4  # Password hashing
 python-jose[cryptography]>=3.3.0  # JWT token handling
 python-multipart>=0.0.6  # Form data handling
+
+# Secret Management
+hvac>=2.0.0  # HashiCorp Vault client
+cryptography>=41.0.0  # Encryption for database secrets
+
+# Real-time Updates
+websockets>=12.0  # WebSocket support
+python-socketio>=5.10.0  # Socket.IO for fallback
+
+# Monitoring & Observability
+psutil>=5.9.0  # System metrics
+prometheus-client>=0.19.0  # Prometheus metrics

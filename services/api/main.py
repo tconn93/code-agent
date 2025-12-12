@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, WebSocket, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import update
 from typing import List, Optional, Dict, Any
@@ -22,6 +22,13 @@ from services.api.auth_routes import router as auth_router
 from services.api.cost_routes import router as cost_router
 from services.api.auth import get_current_user, get_current_user_optional, check_project_access
 from services.api.security import setup_cors, SecurityHeaders, check_rate_limit
+from services.api.websocket import websocket_endpoint
+from services.monitoring import (
+    metrics_endpoint,
+    health_endpoint,
+    readiness_endpoint,
+    liveness_endpoint
+)
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -301,6 +308,46 @@ class AgentResponse(AgentCreate):
 @app.get("/")
 def read_root():
     return {"status": "ok", "version": "2.0.0"}
+
+
+# =============================================================================
+# WebSocket Endpoint
+# =============================================================================
+
+@app.websocket("/ws")
+async def websocket_route(websocket: WebSocket, token: Optional[str] = None):
+    """WebSocket endpoint for real-time updates."""
+    await websocket_endpoint(websocket, token)
+
+
+# =============================================================================
+# Monitoring & Health Check Endpoints
+# =============================================================================
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint."""
+    return metrics_endpoint()
+
+
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    """Comprehensive health check."""
+    return health_endpoint(db, r)
+
+
+@app.get("/health/ready")
+def readiness(db: Session = Depends(get_db)):
+    """Kubernetes readiness probe."""
+    health_status = readiness_endpoint(db, r)
+    status_code = 200 if health_status["ready"] else 503
+    return Response(content=json.dumps(health_status), status_code=status_code, media_type="application/json")
+
+
+@app.get("/health/live")
+def liveness():
+    """Kubernetes liveness probe."""
+    return liveness_endpoint()
 
 # Projects
 @app.post("/projects/", response_model=ProjectResponse)
