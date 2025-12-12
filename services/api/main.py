@@ -21,6 +21,7 @@ from providers.grok_provider import GrokProvider
 from services.api.auth_routes import router as auth_router
 from services.api.cost_routes import router as cost_router
 from services.api.auth import get_current_user, get_current_user_optional, check_project_access
+from services.api.security import setup_cors, SecurityHeaders, check_rate_limit
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -33,6 +34,12 @@ except Exception as e:
     docker_client = None
 
 app = FastAPI(title="AI Agent Platform API")
+
+# Setup CORS
+setup_cors(app)
+
+# Add security headers middleware
+app.middleware("http")(SecurityHeaders.add_security_headers)
 
 # Include routers
 app.include_router(auth_router)

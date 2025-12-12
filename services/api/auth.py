@@ -14,7 +14,9 @@ from services.api.database import get_db
 from services.api import models
 
 # Security configuration
-SECRET_KEY = "your-secret-key-change-this-in-production"  # TODO: Move to environment variable
+from services.api.security import get_secret_key
+
+SECRET_KEY = get_secret_key()  # Loaded from environment variable
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 

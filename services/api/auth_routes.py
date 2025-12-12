@@ -17,8 +17,13 @@ from services.api.auth import (
     get_current_user,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
+from services.api.security import InputValidator, check_rate_limit
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(
+    prefix="/auth",
+    tags=["authentication"],
+    dependencies=[Depends(check_rate_limit)]  # Rate limit all auth endpoints
+)
 
 
 # Pydantic schemas
@@ -65,6 +70,21 @@ class APIKeyResponse(BaseModel):
 @router.post("/register", response_model=Token)
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
     """Register a new user."""
+    # Validate email format
+    if not InputValidator.validate_email(user_data.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email format"
+        )
+
+    # Validate password strength
+    is_valid, error_msg = InputValidator.validate_password_strength(user_data.password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg
+        )
+
     # Check if email already exists
     existing_user = db.query(models.User).filter(models.User.email == user_data.email).first()
     if existing_user:
@@ -73,13 +93,18 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
             detail="Email already registered"
         )
 
+    # Sanitize inputs
+    email = InputValidator.sanitize_string(user_data.email, 255)
+    name = InputValidator.sanitize_string(user_data.name, 255)
+    department = InputValidator.sanitize_string(user_data.department, 255) if user_data.department else None
+
     # Create new user
     hashed_password = get_password_hash(user_data.password)
     new_user = models.User(
-        email=user_data.email,
-        name=user_data.name,
+        email=email,
+        name=name,
         password_hash=hashed_password,
-        department=user_data.department,
+        department=department,
         role="developer"  # Default role
     )
 
