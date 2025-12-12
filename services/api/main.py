@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, WebSocket, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import update
 from typing import List, Optional, Dict, Any
@@ -18,6 +18,17 @@ from providers.openai_provider import OpenAIProvider
 from providers.gemini_provider import GeminiProvider
 from providers.groq_provider import GroqProvider
 from providers.grok_provider import GrokProvider
+from services.api.auth_routes import router as auth_router
+from services.api.cost_routes import router as cost_router
+from services.api.auth import get_current_user, get_current_user_optional, check_project_access
+from services.api.security import setup_cors, SecurityHeaders, check_rate_limit
+from services.api.websocket import websocket_endpoint
+from services.monitoring import (
+    metrics_endpoint,
+    health_endpoint,
+    readiness_endpoint,
+    liveness_endpoint
+)
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -30,6 +41,16 @@ except Exception as e:
     docker_client = None
 
 app = FastAPI(title="AI Agent Platform API")
+
+# Setup CORS
+setup_cors(app)
+
+# Add security headers middleware
+app.middleware("http")(SecurityHeaders.add_security_headers)
+
+# Include routers
+app.include_router(auth_router)
+app.include_router(cost_router)
 
 # Initialize Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -288,10 +309,59 @@ class AgentResponse(AgentCreate):
 def read_root():
     return {"status": "ok", "version": "2.0.0"}
 
+
+# =============================================================================
+# WebSocket Endpoint
+# =============================================================================
+
+@app.websocket("/ws")
+async def websocket_route(websocket: WebSocket, token: Optional[str] = None):
+    """WebSocket endpoint for real-time updates."""
+    await websocket_endpoint(websocket, token)
+
+
+# =============================================================================
+# Monitoring & Health Check Endpoints
+# =============================================================================
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint."""
+    return metrics_endpoint()
+
+
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    """Comprehensive health check."""
+    return health_endpoint(db, r)
+
+
+@app.get("/health/ready")
+def readiness(db: Session = Depends(get_db)):
+    """Kubernetes readiness probe."""
+    health_status = readiness_endpoint(db, r)
+    status_code = 200 if health_status["ready"] else 503
+    return Response(content=json.dumps(health_status), status_code=status_code, media_type="application/json")
+
+
+@app.get("/health/live")
+def liveness():
+    """Kubernetes liveness probe."""
+    return liveness_endpoint()
+
 # Projects
 @app.post("/projects/", response_model=ProjectResponse)
-def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
-    db_project = models.Project(**project.dict())
+def create_project(
+    project: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # Set owner to current user if not specified
+    project_dict = project.dict()
+    if not project_dict.get('owner_id'):
+        project_dict['owner_id'] = current_user.id
+
+    db_project = models.Project(**project_dict)
     db.add(db_project)
     db.commit()
     db.refresh(db_project)

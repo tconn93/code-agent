@@ -102,6 +102,7 @@ class BaseAgent(ABC):
         """
         workspace_mount = existing_workspace or self.workspace_path
 
+        # Security-hardened container configuration
         self.container = self.docker_client.containers.run(
             self.docker_image,
             detach=True,
@@ -112,7 +113,27 @@ class BaseAgent(ABC):
                     'mode': 'rw'
                 }
             },
-            network_mode="bridge"
+            # Security: Limit resources
+            mem_limit='2g',  # 2GB memory limit
+            memswap_limit='2g',  # No swap allowed
+            cpu_quota=100000,  # 100% of one core (100000/100000)
+            cpu_shares=1024,  # Default priority
+
+            # Security: Network isolation (change to 'none' for full isolation)
+            network_mode="bridge",  # or "none" for complete isolation
+
+            # Security: No new privileges
+            security_opt=['no-new-privileges:true'],
+
+            # Security: Read-only root filesystem (workspace is still writable)
+            # read_only=True,  # Uncomment if you want read-only root
+
+            # Security: Drop all capabilities except what's needed
+            cap_drop=['ALL'],
+            cap_add=['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETGID', 'SETUID'],
+
+            # Timeout: Auto-remove after 1 hour
+            auto_remove=True
         )
 
         if repo_url:

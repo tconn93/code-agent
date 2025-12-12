@@ -169,15 +169,59 @@ class Job(Base):
     type = Column(String, nullable=False)
     status = Column(String, default="pending")
     payload = Column(JSON)
+    result = Column(JSON, nullable=True)
+    logs = Column(Text, nullable=True)
     assigned_agent_id = Column(Integer, ForeignKey("agents.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Error Recovery
+    retry_count = Column(Integer, default=0)
+    max_retries = Column(Integer, default=3)
+    failure_reason = Column(Text, nullable=True)
+    last_error = Column(Text, nullable=True)
+    next_retry_at = Column(DateTime, nullable=True)
+
+    # Enterprise Features
+    priority = Column(String, default="medium")  # low, medium, high, critical
+    requested_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    review_required = Column(Boolean, default=False)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    # Cost Tracking
+    estimated_cost = Column(Numeric(10,2), nullable=True)
+    actual_cost = Column(Numeric(10,2), nullable=True)
+    tokens_used_input = Column(Integer, nullable=True)
+    tokens_used_output = Column(Integer, nullable=True)
+    tokens_used_total = Column(Integer, nullable=True)
+
+    # Performance
+    estimated_duration = Column(Integer, nullable=True)  # seconds
+    actual_duration = Column(Integer, nullable=True)  # seconds
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    # Security
+    security_level = Column(String, default="standard")
+    data_sensitivity = Column(String, nullable=True)
+    environment = Column(String, nullable=True)  # dev, staging, prod
+
+    # Quality
+    quality_score = Column(Numeric(5,2), nullable=True)
+    sla_deadline = Column(DateTime, nullable=True)
+    tags = Column(JSON, nullable=True)
 
     # Relationships
     project = relationship("Project", back_populates="jobs")  # many_to_one: Job belongs to one Project
     sprint = relationship("Sprint", back_populates="jobs")  # many_to_one: Job belongs to one Sprint
     assigned_agent = relationship("Agent")  # many_to_one: Job assigned to one Agent
     artifacts = relationship("Artifact", back_populates="job")  # one_to_many: Job has many Artifacts
+    requested_by_user = relationship("User", foreign_keys=[requested_by])
+    approved_by_user = relationship("User", foreign_keys=[approved_by])
+    reviewed_by_user = relationship("User", foreign_keys=[reviewed_by])
 
 class Sprint(Base):
     __tablename__ = "sprints"
@@ -256,6 +300,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     name = Column(String)
+    password_hash = Column(String, nullable=True)  # Hashed password for authentication
     role = Column(String, default="developer")  # admin, manager, developer, viewer
     department = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
@@ -268,6 +313,25 @@ class User(Base):
     updated_projects = relationship("Project", foreign_keys="Project.updated_by", back_populates="updated_by_user")
     teams = relationship("TeamMember", back_populates="user")
     audit_logs = relationship("AuditLog", back_populates="user")
+    api_keys = relationship("APIKey", back_populates="user")
+
+
+class APIKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    key = Column(String, unique=True, index=True)  # The actual API key
+    name = Column(String, nullable=True)  # User-friendly name
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)  # Optional expiration
+    scopes = Column(JSON, nullable=True)  # Permissions/scopes for this key
+
+    # Relationships
+    user = relationship("User", back_populates="api_keys")
 
 
 class Team(Base):

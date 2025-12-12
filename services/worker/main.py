@@ -27,6 +27,8 @@ from agents.coding_agent import CodingAgent
 from agents.testing_agent import TestingAgent
 from agents.deployment_agent import DeploymentAgent
 from agents.monitoring_agent import MonitoringAgent
+from services.error_recovery import handle_job_failure, CircuitBreaker
+from services.cost_tracking import update_job_cost, enforce_budget_limit
 
 # Configure logging
 logging.basicConfig(
@@ -59,6 +61,15 @@ AGENT_CLASSES = {
     "testing": TestingAgent,
     "deployment": DeploymentAgent,
     "monitoring": MonitoringAgent,
+}
+
+# Circuit breakers for AI providers (one per provider)
+CIRCUIT_BREAKERS = {
+    "anthropic": CircuitBreaker(failure_threshold=5, timeout=60),
+    "openai": CircuitBreaker(failure_threshold=5, timeout=60),
+    "google": CircuitBreaker(failure_threshold=5, timeout=60),
+    "groq": CircuitBreaker(failure_threshold=5, timeout=60),
+    "xai": CircuitBreaker(failure_threshold=5, timeout=60),
 }
 
 
@@ -166,14 +177,25 @@ class Worker:
                 logger.info(f"Job {job_id} already {job.status}, skipping")
                 return
 
+            # Check budget before starting job
+            if not enforce_budget_limit(job.project_id, db):
+                logger.warning(f"Job {job_id} blocked: project {job.project_id} budget exceeded")
+                job.status = "blocked"
+                job.failure_reason = "Project budget exceeded"
+                job.updated_at = datetime.utcnow()
+                db.commit()
+                return
+
             # Update job status to running
             job.status = "running"
+            job.started_at = datetime.utcnow()
             job.updated_at = datetime.utcnow()
             if self.agent_id:
                 job.assigned_agent_id = self.agent_id
             db.commit()
 
             self.current_job_id = job_id
+            start_time = time.time()
             logger.info(f"Starting job {job_id}: type={job.type}, project_id={job.project_id}")
 
             # Get agent configuration from assigned agent or use defaults
@@ -198,25 +220,42 @@ class Worker:
             # Update job with results
             job.status = "completed"
             job.result = result
+            job.completed_at = datetime.utcnow()
+            job.actual_duration = int(time.time() - start_time)
             job.updated_at = datetime.utcnow()
+
+            # Track token usage and costs if available
+            if hasattr(result, 'get') and result.get('usage'):
+                usage = result['usage']
+                job.tokens_used_input = usage.get('input_tokens', 0)
+                job.tokens_used_output = usage.get('output_tokens', 0)
+                job.tokens_used_total = job.tokens_used_input + job.tokens_used_output
+
+                # Calculate and update cost
+                update_job_cost(job, agent_provider, agent_model)
+
             db.commit()
 
-            logger.info(f"Job {job_id} completed successfully")
+            logger.info(f"Job {job_id} completed successfully in {job.actual_duration}s")
 
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}", exc_info=True)
 
-            # Update job status to failed
+            # Use error recovery system for retry logic or DLQ
             try:
                 job = db.query(Job).filter(Job.id == job_id).first()
                 if job:
-                    job.status = "failed"
-                    job.result = {"error": str(e)}
-                    job.logs = f"Error: {str(e)}"
-                    job.updated_at = datetime.utcnow()
-                    db.commit()
+                    # Handle failure with retry/DLQ logic
+                    max_retries = job.max_retries or 3
+                    handle_job_failure(
+                        job=job,
+                        db=db,
+                        redis_client=r,
+                        error_message=str(e),
+                        max_retries=max_retries
+                    )
             except Exception as update_error:
-                logger.error(f"Failed to update job status: {update_error}")
+                logger.error(f"Failed to handle job failure: {update_error}")
                 db.rollback()
 
         finally:
