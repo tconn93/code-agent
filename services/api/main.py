@@ -18,6 +18,9 @@ from providers.openai_provider import OpenAIProvider
 from providers.gemini_provider import GeminiProvider
 from providers.groq_provider import GroqProvider
 from providers.grok_provider import GrokProvider
+from services.api.auth_routes import router as auth_router
+from services.api.cost_routes import router as cost_router
+from services.api.auth import get_current_user, get_current_user_optional, check_project_access
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -30,6 +33,10 @@ except Exception as e:
     docker_client = None
 
 app = FastAPI(title="AI Agent Platform API")
+
+# Include routers
+app.include_router(auth_router)
+app.include_router(cost_router)
 
 # Initialize Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -290,8 +297,17 @@ def read_root():
 
 # Projects
 @app.post("/projects/", response_model=ProjectResponse)
-def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
-    db_project = models.Project(**project.dict())
+def create_project(
+    project: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # Set owner to current user if not specified
+    project_dict = project.dict()
+    if not project_dict.get('owner_id'):
+        project_dict['owner_id'] = current_user.id
+
+    db_project = models.Project(**project_dict)
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
